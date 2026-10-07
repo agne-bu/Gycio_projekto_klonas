@@ -7,10 +7,10 @@ import Profile from "./Profile";
 import "./App.css";
 
 function App() {
-  const user = {
+  const [user, setUser] = useState({
     name: "Jonas Jonaitis",
     email: "jonas@flowly.lt",
-  };
+  });
 
   const [activePage, setActivePage] = useState("home");
   const [email, setEmail] = useState("");
@@ -168,7 +168,9 @@ function App() {
         </>
       )}
 
-      {activePage === "profile" && <Profile user={user} tasks={tasks} />}
+      {activePage === "profile" && (
+        <Profile user={user} tasks={tasks} onSaveProfile={setUser} />
+      )}
     </>
   );
 }

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import "./Profile.css";
 
 function getInitials(name = "") {
@@ -9,7 +10,12 @@ function getInitials(name = "") {
   return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
 }
 
-function Profile({ user = {}, tasks = [] }) {
+function Profile({ user = {}, tasks = [], onSaveProfile }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    name: user?.name || user?.username || "",
+    email: user?.email || "",
+  });
   const safeTasks = Array.isArray(tasks) ? tasks : [];
   const name = user?.name || user?.username || "Flowly naudotojas";
   const email = user?.email || "Nenurodytas";
@@ -19,6 +25,25 @@ function Profile({ user = {}, tasks = [] }) {
   const progress = safeTasks.length
     ? Math.round((completedTasks / safeTasks.length) * 100)
     : 0;
+
+  function handleEdit() {
+    setFormData({ name, email: email === "Nenurodytas" ? "" : email });
+    setIsEditing(true);
+  }
+
+  function handleCancel() {
+    setFormData({ name, email: email === "Nenurodytas" ? "" : email });
+    setIsEditing(false);
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    onSaveProfile?.({
+      name: formData.name.trim(),
+      email: formData.email.trim(),
+    });
+    setIsEditing(false);
+  }
 
   return (
     <main className="profile-page">
@@ -73,20 +98,63 @@ function Profile({ user = {}, tasks = [] }) {
           </div>
         </div>
 
-        <dl className="profile-account__details">
-          <div>
-            <dt>Vardas</dt>
-            <dd>{name}</dd>
-          </div>
-          <div>
-            <dt>El. paštas</dt>
-            <dd>{email}</dd>
-          </div>
-        </dl>
+        {isEditing ? (
+          <form className="profile-edit-form" onSubmit={handleSubmit}>
+            <label className="profile-edit-field">
+              <span>Vardas</span>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(event) =>
+                  setFormData((current) => ({ ...current, name: event.target.value }))
+                }
+                autoComplete="name"
+                required
+              />
+            </label>
+            <label className="profile-edit-field">
+              <span>El. paštas</span>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(event) =>
+                  setFormData((current) => ({ ...current, email: event.target.value }))
+                }
+                autoComplete="email"
+                required
+              />
+            </label>
+            <div className="profile-edit-actions">
+              <button className="profile-edit-button" type="submit">
+                Išsaugoti
+              </button>
+              <button
+                className="profile-cancel-button"
+                type="button"
+                onClick={handleCancel}
+              >
+                Atšaukti
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <dl className="profile-account__details">
+              <div>
+                <dt>Vardas</dt>
+                <dd>{name}</dd>
+              </div>
+              <div>
+                <dt>El. paštas</dt>
+                <dd>{email}</dd>
+              </div>
+            </dl>
 
-        <button className="profile-edit-button" type="button" disabled>
-          Redaguoti profilį
-        </button>
+            <button className="profile-edit-button" type="button" onClick={handleEdit}>
+              Redaguoti profilį
+            </button>
+          </>
+        )}
       </section>
     </main>
   );
