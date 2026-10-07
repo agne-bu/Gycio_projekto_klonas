@@ -85,8 +85,7 @@ function App() {
         <>
           {isLoggedIn && (
             <header className="welcome-message">
-              <h1>Sveiki sugrįžę!</h1>
-              <p>Prisijungėte kaip admin.</p>
+              <h1>Sveiki sugrįžę, {user.name || "naudotojau"}!</h1>
             </header>
           )}
 
