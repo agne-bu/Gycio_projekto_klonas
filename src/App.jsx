@@ -7,6 +7,7 @@ import Profile from "./Profile";
 import "./App.css";
 
 const TASKS_API_URL = "https://testapi.io/api/agne-bu/resource/tasklist";
+const USERS_API_URL = "https://testapi.io/api/agne-bu/resource/Useriai";
 
 async function readApiResponse(response) {
   const responseText = await response.text();
@@ -38,13 +39,31 @@ function normalizeTask(task) {
   const status = record.status || record["Būsena"] || "";
   const rawDeadline = record.deadline || record["Terminas"];
   const deadline = rawDeadline ? String(rawDeadline).slice(0, 10) : "";
+  const ownerUsername = record["Vartotojo vardas"] || record.ownerUsername || "";
 
   return {
     id,
     title: title || `Įrašas #${id ?? "be ID"}`,
     status: status || "Nepradėta",
     deadline,
+    ownerUsername,
     isIncomplete: !title || !status || !deadline,
+  };
+}
+
+function getApiRecords(result) {
+  if (Array.isArray(result)) return result;
+  if (Array.isArray(result?.data)) return result.data;
+  return [];
+}
+
+function normalizeUser(user) {
+  const record = user?.data && !Array.isArray(user.data) ? user.data : user || {};
+
+  return {
+    id: record.id ?? record._id,
+    username: record["Vartotojo vardas"] || record.username || "",
+    password: record.Slaptazodis || record.password || "",
   };
 }
 
@@ -55,30 +74,38 @@ function App() {
   });
 
   const [activePage, setActivePage] = useState("home");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginError, setLoginError] = useState("");
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   const [tasks, setTasks] = useState([]);
   const [tasksLoading, setTasksLoading] = useState(true);
   const [apiError, setApiError] = useState("");
 
   useEffect(() => {
+    if (!isLoggedIn || !username.trim()) {
+      setTasks([]);
+      setTasksLoading(false);
+      return undefined;
+    }
+
     let isMounted = true;
+    setTasksLoading(true);
 
     async function loadTasks() {
       try {
         const response = await fetch(TASKS_API_URL);
         const result = await readApiResponse(response);
-        const records = Array.isArray(result)
-          ? result
-          : Array.isArray(result?.data)
-            ? result.data
-            : [];
+        const records = getApiRecords(result);
         const loadedTasks = records
           .map(normalizeTask)
-          .filter((task) => !task.isIncomplete);
+          .filter(
+            (task) =>
+              !task.isIncomplete && task.ownerUsername === username.trim(),
+          );
 
         if (isMounted) {
           setTasks(loadedTasks);
@@ -98,18 +125,68 @@ function App() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isLoggedIn, username]);
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
+    setLoginError("");
+    setIsAuthenticating(true);
 
-    if (email === "admin" && password === "admin") {
+    try {
+      const usersResponse = await fetch(USERS_API_URL);
+      const usersResult = await readApiResponse(usersResponse);
+      const users = getApiRecords(usersResult).map(normalizeUser);
+      const matchingUser = users.find(
+        (user) => user.username === username.trim(),
+      );
+
+      if (isRegistering) {
+        if (matchingUser) {
+          setLoginError("Toks vartotojo vardas jau užregistruotas.");
+          return;
+        }
+
+        const createResponse = await fetch(USERS_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            "Vartotojo vardas": username.trim(),
+            Slaptazodis: password,
+          }),
+        });
+        const createdUser = normalizeUser(await readApiResponse(createResponse));
+
+        if (
+          createdUser.username !== username.trim() ||
+          createdUser.password !== password
+        ) {
+          throw new Error(
+            "API neišsaugojo vartotojo duomenų. Patikrink laukų pavadinimus Vartotojo vardas ir Slaptazodis.",
+          );
+        }
+
+        setPassword("");
+        setIsRegistering(false);
+        setLoginError("Paskyra sukurta. Dabar prisijunkite.");
+        return;
+      }
+
+      if (!matchingUser || matchingUser.password !== password) {
+        setLoginError("Neteisingas vartotojo vardas arba slaptažodis.");
+        return;
+      }
+
+      setUser((currentUser) => ({
+        ...currentUser,
+        name: matchingUser.username,
+      }));
+      setUsername(matchingUser.username);
       setIsLoggedIn(true);
-      setLoginError("");
-      return;
+    } catch (error) {
+      setLoginError(`Nepavyko prisijungti: ${error.message}`);
+    } finally {
+      setIsAuthenticating(false);
     }
-
-    setLoginError("Neteisingas vartotojo vardas arba slaptažodis.");
   }
 
   async function handleAddTask(newTask) {
@@ -121,6 +198,7 @@ function App() {
           "Užduotis": newTask.title,
           "Būsena": newTask.status,
           "Terminas": newTask.deadline,
+          "Vartotojo vardas": username.trim(),
         }),
       });
       const result = await readApiResponse(response);
@@ -133,6 +211,12 @@ function App() {
       if (savedTask.isIncomplete) {
         throw new Error(
           "TestAPI priėmė įrašą, bet jo laukų neišsaugojo. Patikrink stulpelius Užduotis, Būsena ir Terminas.",
+        );
+      }
+
+      if (savedTask.ownerUsername !== username.trim()) {
+        throw new Error(
+          "TestAPI neišsaugojo vartotojo ryšio. tasklist lentelėje sukurk stulpelį Vartotojo vardas.",
         );
       }
 
@@ -155,6 +239,7 @@ function App() {
         "Užduotis": updatedTask.title,
         "Būsena": updatedTask.status,
         "Terminas": updatedTask.deadline,
+        "Vartotojo vardas": username.trim(),
       };
 
       const response = await fetch(
@@ -214,8 +299,12 @@ function App() {
               <div className="login-card">
                 <>
                   <header className="login-card__header">
-                    <h1>Prisijungti</h1>
-                    <p>Įveskite savo duomenis, kad tęstumėte</p>
+                    <h1>{isRegistering ? "Registruotis" : "Prisijungti"}</h1>
+                    <p>
+                      {isRegistering
+                        ? "Sukurkite paskyrą tęsdami žemiau"
+                        : "Įveskite savo duomenis, kad tęstumėte"}
+                    </p>
                   </header>
 
                   <form className="login-form" onSubmit={handleSubmit}>
@@ -226,8 +315,8 @@ function App() {
                         name="username"
                         autoComplete="username"
                         placeholder="admin"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
+                        value={username}
+                        onChange={(event) => setUsername(event.target.value)}
                         required
                       />
                     </label>
@@ -237,7 +326,9 @@ function App() {
                       <input
                         type="password"
                         name="password"
-                        autoComplete="current-password"
+                        autoComplete={
+                          isRegistering ? "new-password" : "current-password"
+                        }
                         placeholder="••••••••"
                         value={password}
                         onChange={(event) => setPassword(event.target.value)}
@@ -245,8 +336,30 @@ function App() {
                       />
                     </label>
 
-                    <button type="submit" className="login-submit">
-                      Prisijungti
+                    <button
+                      type="submit"
+                      className="login-submit"
+                      disabled={isAuthenticating}
+                    >
+                      {isAuthenticating
+                        ? "Tikrinama..."
+                        : isRegistering
+                          ? "Sukurti paskyrą"
+                          : "Prisijungti"}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="login-switch"
+                      disabled={isAuthenticating}
+                      onClick={() => {
+                        setIsRegistering((current) => !current);
+                        setLoginError("");
+                      }}
+                    >
+                      {isRegistering
+                        ? "Jau turite paskyrą? Prisijunkite"
+                        : "Neturite paskyros? Registruokitės"}
                     </button>
 
                     {loginError && (
