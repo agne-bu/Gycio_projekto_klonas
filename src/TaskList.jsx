@@ -27,39 +27,50 @@ function TaskList({ tasks = [], loading = false, onStatusChange, onDeadlineChang
       <div className="task-list">
         {tasks.map((task) => (
           <article className="task-item" key={task.id}>
-            <div className="task-item__top">
-              <h3>{task.title}</h3>
+            {task.isIncomplete ? (
+              <div>
+                <h3>{task.title}</h3>
+                <p className="task-state">
+                  API įraše nėra išsaugotų užduoties laukų (ID: {task.id}).
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="task-item__top">
+                  <h3>{task.title}</h3>
 
-              <label className="task-status-field">
-                <span className="visually-hidden">Užduoties statusas</span>
-                <select
-                  className={`task-status task-status--${task.status
-                    .toLowerCase()
-                    .replace(" ", "-")}`}
-                  value={task.status}
-                  onChange={(event) =>
-                    onStatusChange?.(task.id, event.target.value)
-                  }
-                  aria-label={`Keisti užduoties „${task.title}“ statusą`}
-                >
-                  <option value="Nepradėta">Nepradėta</option>
-                  <option value="Vykdoma">Vykdoma</option>
-                  <option value="Atlikta">Atlikta</option>
-                </select>
-              </label>
-            </div>
+                  <label className="task-status-field">
+                    <span className="visually-hidden">Užduoties statusas</span>
+                    <select
+                      className={`task-status task-status--${task.status
+                        .toLowerCase()
+                        .replace(" ", "-")}`}
+                      value={task.status}
+                      onChange={(event) =>
+                        onStatusChange?.(task.id, event.target.value)
+                      }
+                      aria-label={`Keisti užduoties „${task.title}“ statusą`}
+                    >
+                      <option value="Nepradėta">Nepradėta</option>
+                      <option value="Vykdoma">Vykdoma</option>
+                      <option value="Atlikta">Atlikta</option>
+                    </select>
+                  </label>
+                </div>
 
-            <label className="task-deadline">
-              <span>Terminas:</span>
-              <input
-                type="date"
-                value={task.deadline}
-                onChange={(event) =>
-                  onDeadlineChange?.(task.id, event.target.value)
-                }
-                aria-label={`Keisti užduoties „${task.title}“ terminą`}
-              />
-            </label>
+                <label className="task-deadline">
+                  <span>Terminas:</span>
+                  <input
+                    type="date"
+                    value={task.deadline}
+                    onChange={(event) =>
+                      onDeadlineChange?.(task.id, event.target.value)
+                    }
+                    aria-label={`Keisti užduoties „${task.title}“ terminą`}
+                  />
+                </label>
+              </>
+            )}
           </article>
         ))}
       </div>

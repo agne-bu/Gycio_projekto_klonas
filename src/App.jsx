@@ -1,10 +1,52 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import TaskList from "./TaskList";
 import ProgressBar from "./ProgressBar";
 import Navbar from "./Navbar";
 import AddTaskForm from "./AddTaskForm";
 import Profile from "./Profile";
 import "./App.css";
+
+const TASKS_API_URL = "https://testapi.io/api/agne-bu/resource/tasklist";
+
+async function readApiResponse(response) {
+  const responseText = await response.text();
+  let responseData = null;
+
+  if (responseText) {
+    try {
+      responseData = JSON.parse(responseText);
+    } catch {
+      responseData = responseText;
+    }
+  }
+
+  if (!response.ok) {
+    const message =
+      typeof responseData === "object" && responseData?.message
+        ? responseData.message
+        : `Serverio klaida (${response.status}).`;
+    throw new Error(message);
+  }
+
+  return responseData;
+}
+
+function normalizeTask(task) {
+  const record = task?.data && !Array.isArray(task.data) ? task.data : task || {};
+  const id = record.id ?? record._id;
+  const title = record.title || record["Užduotis"] || "";
+  const status = record.status || record["Būsena"] || "";
+  const rawDeadline = record.deadline || record["Terminas"];
+  const deadline = rawDeadline ? String(rawDeadline).slice(0, 10) : "";
+
+  return {
+    id,
+    title: title || `Įrašas #${id ?? "be ID"}`,
+    status: status || "Nepradėta",
+    deadline,
+    isIncomplete: !title || !status || !deadline,
+  };
+}
 
 function App() {
   const [user, setUser] = useState({
@@ -18,20 +60,45 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginError, setLoginError] = useState("");
 
-  const [tasks, setTasks] = useState([
-    {
-      id: 1,
-      title: "Sukurti prisijungimo formą",
-      status: "Atlikta",
-      deadline: "2026-10-01",
-    },
-    {
-      id: 2,
-      title: "Sukurti užduočių sąrašą",
-      status: "Vykdoma",
-      deadline: "2026-10-05",
-    },
-  ]);
+  const [tasks, setTasks] = useState([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
+  const [apiError, setApiError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadTasks() {
+      try {
+        const response = await fetch(TASKS_API_URL);
+        const result = await readApiResponse(response);
+        const records = Array.isArray(result)
+          ? result
+          : Array.isArray(result?.data)
+            ? result.data
+            : [];
+        const loadedTasks = records
+          .map(normalizeTask)
+          .filter((task) => !task.isIncomplete);
+
+        if (isMounted) {
+          setTasks(loadedTasks);
+          setApiError("");
+        }
+      } catch (error) {
+        if (isMounted) {
+          setApiError(`Nepavyko įkelti užduočių: ${error.message}`);
+        }
+      } finally {
+        if (isMounted) setTasksLoading(false);
+      }
+    }
+
+    loadTasks();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   function handleSubmit(event) {
     event.preventDefault();
@@ -45,24 +112,77 @@ function App() {
     setLoginError("Neteisingas vartotojo vardas arba slaptažodis.");
   }
 
-  function handleAddTask(newTask) {
-    setTasks((currentTasks) => [...currentTasks, newTask]);
+  async function handleAddTask(newTask) {
+    try {
+      const response = await fetch(TASKS_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          "Užduotis": newTask.title,
+          "Būsena": newTask.status,
+          "Terminas": newTask.deadline,
+        }),
+      });
+      const result = await readApiResponse(response);
+      const savedTask = normalizeTask(result);
+
+      if (savedTask.id == null) {
+        throw new Error("API atsakyme trūksta išsaugotos užduoties ID.");
+      }
+
+      if (savedTask.isIncomplete) {
+        throw new Error(
+          "TestAPI priėmė įrašą, bet jo laukų neišsaugojo. Patikrink stulpelius Užduotis, Būsena ir Terminas.",
+        );
+      }
+
+      setTasks((currentTasks) => [...currentTasks, savedTask]);
+      setApiError("");
+      return true;
+    } catch (error) {
+      setApiError(`Nepavyko išsaugoti užduoties: ${error.message}`);
+      return false;
+    }
+  }
+
+  async function updateTask(taskId, changes) {
+    try {
+      const currentTask = tasks.find(
+        (task) => String(task.id) === String(taskId),
+      );
+      const updatedTask = { ...currentTask, ...changes };
+      const apiChanges = {
+        "Užduotis": updatedTask.title,
+        "Būsena": updatedTask.status,
+        "Terminas": updatedTask.deadline,
+      };
+
+      const response = await fetch(
+        `${TASKS_API_URL}/${encodeURIComponent(taskId)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(apiChanges),
+        },
+      );
+      await readApiResponse(response);
+      setTasks((currentTasks) =>
+        currentTasks.map((task) =>
+          String(task.id) === String(taskId) ? { ...task, ...changes } : task,
+        ),
+      );
+      setApiError("");
+    } catch (error) {
+      setApiError(`Nepavyko atnaujinti užduoties: ${error.message}`);
+    }
   }
 
   function handleTaskStatusChange(taskId, status) {
-    setTasks((currentTasks) =>
-      currentTasks.map((task) =>
-        task.id === taskId ? { ...task, status } : task,
-      ),
-    );
+    return updateTask(taskId, { status });
   }
 
   function handleTaskDeadlineChange(taskId, deadline) {
-    setTasks((currentTasks) =>
-      currentTasks.map((task) =>
-        task.id === taskId ? { ...task, deadline } : task,
-      ),
-    );
+    return updateTask(taskId, { deadline });
   }
 
   const today = new Date();
@@ -151,9 +271,15 @@ function App() {
                   </p>
                 </section>
 
+                {apiError && (
+                  <p className="login-error" role="alert">
+                    {apiError}
+                  </p>
+                )}
+
                 <TaskList
                   tasks={tasks}
-                  loading={false}
+                  loading={tasksLoading}
                   onStatusChange={handleTaskStatusChange}
                   onDeadlineChange={handleTaskDeadlineChange}
                 />
