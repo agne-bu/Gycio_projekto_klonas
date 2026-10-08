@@ -1,4 +1,4 @@
-.progress-card {
+﻿.progress-card {
   width: 100%;
   padding: 36px 32px 32px;
   box-sizing: border-box;
@@ -52,7 +52,7 @@
 
   border-radius: 999px;
   outline: none;
-  cursor: pointer;
+  cursor: default;
 
   background: linear-gradient(
     to right,
@@ -79,11 +79,11 @@
 
   box-shadow: 0 0 0 2px var(--accent-border);
 
-  cursor: grab;
+  cursor: default;
 }
 
 .progress-slider::-webkit-slider-thumb:active {
-  cursor: grabbing;
+  cursor: default;
   transform: scale(1.08);
 }
 
@@ -98,7 +98,7 @@
 
   box-shadow: 0 0 0 2px var(--accent-border);
 
-  cursor: grab;
+  cursor: default;
 }
 
 .progress-slider:focus-visible {

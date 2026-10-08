@@ -284,7 +284,11 @@ function App() {
 
   return (
     <>
-      <Navbar activePage={activePage} onNavigate={setActivePage} />
+      <Navbar
+        activePage={activePage}
+        onNavigate={setActivePage}
+        isLoggedIn={isLoggedIn}
+      />
 
       {activePage === "home" && (
         <>

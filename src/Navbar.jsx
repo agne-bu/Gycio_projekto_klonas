@@ -1,4 +1,5 @@
 import "./Navbar.css";
+import Weather from "./Weather";
 
 function FlowlyLogo() {
   return (
@@ -25,7 +26,7 @@ function FlowlyLogo() {
   );
 }
 
-function Navbar({ activePage, onNavigate }) {
+function Navbar({ activePage, onNavigate, isLoggedIn }) {
   const navigationItems = [
     { label: "Pagrindinis", page: "home", disabled: false },
     { label: "Užduotys", page: null, disabled: true },
@@ -37,9 +38,11 @@ function Navbar({ activePage, onNavigate }) {
     <header className="navbar">
       <nav className="navbar__container" aria-label="Pagrindinė navigacija">
         <div className="navbar__brand">
-          <FlowlyLogo />
-
-          <span className="navbar__brand-name">Flowly</span>
+          <div className="navbar__brand-main">
+            <FlowlyLogo />
+            <span className="navbar__brand-name">Flowly</span>
+          </div>
+          {isLoggedIn && <Weather compact />}
         </div>
 
         <div className="navbar__links">
